@@ -61,7 +61,7 @@ static void test_pct_math(void) {
 }
 
 static void test_catalog(void) {
-  EXPECT(vw_model_catalog_count() == 7);
+  EXPECT(vw_model_catalog_count() == 8);
 
   const vw_model_catalog_entry_t* e = vw_model_catalog_find("tiny.en");
   EXPECT(e != NULL);
@@ -100,9 +100,17 @@ static void test_catalog(void) {
   EXPECT(e->bytes == 3095033483ULL);
   EXPECT(e->multilingual == true);
 
-  // All 7 ids must be findable and have correct invariants.
-  const char* ids[] = {"tiny.en", "tiny", "base.en", "base", "small", "medium", "large"};
-  for (size_t i = 0; i < 7; i++) {
+  // large-v3-turbo: pruned-decoder large-v3; near large-v3 accuracy at roughly half the size and twice the speed.
+  e = vw_model_catalog_find("large-v3-turbo");
+  EXPECT(e != NULL);
+  EXPECT_EQ_STR(e->filename, "ggml-large-v3-turbo.bin");
+  EXPECT_EQ_STR(e->sha256_hex, "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69");
+  EXPECT(e->bytes == 1624555275ULL);
+  EXPECT(e->multilingual == true);
+
+  // Every id must be findable and have correct invariants.
+  const char* ids[] = {"tiny.en", "tiny", "base.en", "base", "small", "medium", "large", "large-v3-turbo"};
+  for (size_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
     const vw_model_catalog_entry_t* ent = vw_model_catalog_find(ids[i]);
     EXPECT(ent != NULL);
     EXPECT(strlen(ent->sha256_hex) == 64);

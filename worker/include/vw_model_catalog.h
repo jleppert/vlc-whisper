@@ -38,6 +38,9 @@ static const vw_model_catalog_entry_t kVWModelCatalogEntries[] = {
      "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208", 1533763059ULL, true},
     {"large", "ggml-large-v3.bin", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin",
      "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2", 3095033483ULL, true},
+    {"large-v3-turbo", "ggml-large-v3-turbo.bin",
+     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+     "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69", 1624555275ULL, true},
 };
 
 static const size_t kVWModelCatalogCount = sizeof(kVWModelCatalogEntries) / sizeof(kVWModelCatalogEntries[0]);

@@ -74,6 +74,16 @@
       "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3.bin"
     },
     {
+      "id": "large-v3-turbo",
+      "filename": "ggml-large-v3-turbo.bin",
+      "language": "universal",
+      "sha256": "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+      "disk_bytes": 1624555275,
+      "ram_bytes_estimate": 6010854518,
+      "multilingual": true,
+      "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin"
+    },
+    {
       "id": "silero-vad",
       "filename": "ggml-silero-vad.bin",
       "language": "universal",

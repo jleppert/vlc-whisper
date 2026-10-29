@@ -64,6 +64,7 @@ local model_map = {
   [5] = "small",
   [6] = "medium",
   [7] = "large",
+  [8] = "large-v3-turbo",
 }
 -- Catalog ids mirror model_map labels (plugin catalog ids are these strings).
 local catalog_id_map = {
@@ -74,6 +75,7 @@ local catalog_id_map = {
   [5] = "small",
   [6] = "medium",
   [7] = "large",
+  [8] = "large-v3-turbo",
 }
 -- Relative model paths under models/ (selection allowed even if file absent;
 -- expected E_MODEL_MISSING disables captions until provisioned -- see README).
@@ -85,6 +87,7 @@ local model_path_map = {
   [5] = "models/ggml-small.bin",
   [6] = "models/ggml-medium.bin",
   [7] = "models/ggml-large-v3.bin",
+  [8] = "models/ggml-large-v3-turbo.bin",
 }
 -- Reverse lookup: path -> id (for preselection from current model-path).
 -- Derived with a numeric loop: the VLC 3.0 scan pass runs this file in a bare

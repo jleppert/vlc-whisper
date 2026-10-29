@@ -115,6 +115,7 @@ vlc -vvv --audio-filter=vlc_whisper
 | small | `models/ggml-small.bin` |
 | medium | `models/ggml-medium.bin` |
 | large | `models/ggml-large-v3.bin` |
+| large-v3-turbo | `models/ggml-large-v3-turbo.bin` |
 
 Selection allowed even if file absent; `E_MODEL_MISSING` disables captions until the selected model is downloaded.
 

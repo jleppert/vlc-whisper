@@ -151,9 +151,10 @@ static const char* vw_plugin_catalog_filename(const char* id) {
     const char* id;
     const char* file;
   } kMap[] = {
-      {"tiny.en", "ggml-tiny.en.bin"}, {"tiny", "ggml-tiny.bin"},   {"base.en", "ggml-base.en.bin"},
-      {"base", "ggml-base.bin"},       {"small", "ggml-small.bin"}, {"medium", "ggml-medium.bin"},
-      {"large", "ggml-large-v3.bin"},
+      {"tiny.en", "ggml-tiny.en.bin"}, {"tiny", "ggml-tiny.bin"},
+      {"base.en", "ggml-base.en.bin"}, {"base", "ggml-base.bin"},
+      {"small", "ggml-small.bin"},     {"medium", "ggml-medium.bin"},
+      {"large", "ggml-large-v3.bin"},  {"large-v3-turbo", "ggml-large-v3-turbo.bin"},
   };
   for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++) {
     if (strcmp(kMap[i].id, id) == 0) return kMap[i].file;
@@ -172,9 +173,10 @@ static const char* vw_plugin_catalog_id_from_path(const char* path) {
     const char* id;
     const char* file;
   } kMap[] = {
-      {"tiny.en", "ggml-tiny.en.bin"}, {"tiny", "ggml-tiny.bin"},   {"base.en", "ggml-base.en.bin"},
-      {"base", "ggml-base.bin"},       {"small", "ggml-small.bin"}, {"medium", "ggml-medium.bin"},
-      {"large", "ggml-large-v3.bin"},
+      {"tiny.en", "ggml-tiny.en.bin"}, {"tiny", "ggml-tiny.bin"},
+      {"base.en", "ggml-base.en.bin"}, {"base", "ggml-base.bin"},
+      {"small", "ggml-small.bin"},     {"medium", "ggml-medium.bin"},
+      {"large", "ggml-large-v3.bin"},  {"large-v3-turbo", "ggml-large-v3-turbo.bin"},
   };
   for (size_t i = 0; i < sizeof(kMap) / sizeof(kMap[0]); i++) {
     if (strcmp(base, kMap[i].file) == 0) return kMap[i].id;
@@ -406,13 +408,13 @@ static vw_worker_client_t* vw_plugin_launch_with_auto_retry(const char* worker_p
 // Resolves a catalog model file in install paths and then the per-user model directory. Empty out means "no model".
 static bool vw_plugin_resolve_model_path(char* out, size_t out_size) {
   const char* model_names[] = {
-      "ggml-tiny.bin",     "models/ggml-tiny.bin",     "ggml-tiny.en.bin", "models/ggml-tiny.en.bin",
-      "ggml-base.bin",     "models/ggml-base.bin",     "ggml-base.en.bin", "models/ggml-base.en.bin",
-      "ggml-small.bin",    "models/ggml-small.bin",    "ggml-medium.bin",  "models/ggml-medium.bin",
-      "ggml-large-v3.bin", "models/ggml-large-v3.bin",
+      "ggml-tiny.bin",     "models/ggml-tiny.bin",     "ggml-tiny.en.bin",        "models/ggml-tiny.en.bin",
+      "ggml-base.bin",     "models/ggml-base.bin",     "ggml-base.en.bin",        "models/ggml-base.en.bin",
+      "ggml-small.bin",    "models/ggml-small.bin",    "ggml-medium.bin",         "models/ggml-medium.bin",
+      "ggml-large-v3.bin", "models/ggml-large-v3.bin", "ggml-large-v3-turbo.bin", "models/ggml-large-v3-turbo.bin",
   };
-  const char* model_files[] = {"ggml-tiny.bin",  "ggml-tiny.en.bin", "ggml-base.bin",    "ggml-base.en.bin",
-                               "ggml-small.bin", "ggml-medium.bin",  "ggml-large-v3.bin"};
+  const char* model_files[] = {"ggml-tiny.bin",  "ggml-tiny.en.bin", "ggml-base.bin",     "ggml-base.en.bin",
+                               "ggml-small.bin", "ggml-medium.bin",  "ggml-large-v3.bin", "ggml-large-v3-turbo.bin"};
   const size_t model_name_count = sizeof(model_names) / sizeof(model_names[0]);
   const size_t model_file_count = sizeof(model_files) / sizeof(model_files[0]);
 #ifdef _WIN32
