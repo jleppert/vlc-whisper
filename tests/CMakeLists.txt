@@ -72,6 +72,12 @@ endif()
 if(FFMPEG_FOUND AND NOT WIN32)
     target_compile_definitions(test_source_decoder PRIVATE -DVW_WITH_FFMPEG)
     target_link_libraries(test_source_decoder PRIVATE PkgConfig::FFMPEG)
+    # Cross-component regression: millisecond-timebase (Matroska) source audio must accumulate in the look-ahead buffer.
+    add_vw_test(test_source_ms_timebase_audio_accumulates integration/test_source_ms_timebase_audio_accumulates.c
+                ${VW_SOURCE_DECODER_SRCS} ${CMAKE_SOURCE_DIR}/worker/src/vw_audio_buffer.c)
+    target_compile_definitions(test_source_ms_timebase_audio_accumulates PRIVATE VW_WITH_FFMPEG
+                               VW_TEST_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures")
+    target_link_libraries(test_source_ms_timebase_audio_accumulates PRIVATE PkgConfig::FFMPEG)
 endif()
 
 add_vw_test(test_worker_config unit/test_worker_config.c ${CMAKE_SOURCE_DIR}/worker/src/vw_worker_config.c)

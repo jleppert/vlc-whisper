@@ -11,6 +11,13 @@
 
 #ifdef VW_WITH_FFMPEG
 
+// Containers with a coarse time base (Matroska/WebM: 1 ms) round every frame PTS by up to half a tick, so frame PTS
+// jitters around the true sample position by hundreds of microseconds. The worker's audio buffer treats any mismatch
+// above one 16 kHz output sample (62.5 us) as a discontinuity and clears itself. Output timestamps are therefore
+// derived from one anchor plus an exact output-sample count; a frame PTS re-anchors the timeline only when it disagrees
+// by more than the container can explain by rounding (two ticks, floor 1 ms), which preserves real gaps and seeks.
+#define VW_SOURCE_DECODER_MIN_REANCHOR_US 1000LL
+
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/channel_layout.h>
@@ -27,7 +34,11 @@ struct vw_source_decoder {
   int64_t duration_us;
   int64_t current_pts_us;
   int64_t seek_target_us;
-  int64_t stream_start_time;  // Container start_time in stream TB; media-relative normalization base.
+  int64_t stream_start_time;      // Container start_time in stream TB; media-relative normalization base.
+  bool pts_anchored;              // timeline anchored to a decoded frame since open/seek
+  int64_t anchor_pts_us;          // media-relative PTS of the anchor output sample
+  uint64_t anchor_samples;        // 16 kHz output samples emitted (or trimmed) since the anchor
+  int64_t reanchor_tolerance_us;  // max frame-PTS disagreement attributable to container rounding
   bool demux_eof;
   bool flush_sent;
   bool eof_reached;
@@ -35,6 +46,26 @@ struct vw_source_decoder {
   int16_t leftover_buffer[4096];
   size_t leftover_count;
 };
+
+// Resets the output timeline so the next output sample sits at pts_us.
+static void vw_source_decoder_anchor(vw_source_decoder_t* decoder, int64_t pts_us) {
+  decoder->anchor_pts_us = pts_us;
+  decoder->anchor_samples = 0;
+  decoder->current_pts_us = pts_us;
+}
+
+// Advances the timeline by whole 16 kHz output samples (62.5 us each) without accumulating rounding error.
+static void vw_source_decoder_advance(vw_source_decoder_t* decoder, size_t samples) {
+  decoder->anchor_samples += samples;
+  decoder->current_pts_us = decoder->anchor_pts_us + (int64_t)((decoder->anchor_samples * 125U) / 2U);
+}
+
+// Returns the PTS of the output sample `samples` positions before the current timeline position.
+static int64_t vw_source_decoder_pts_before(const vw_source_decoder_t* decoder, size_t samples) {
+  if (decoder->anchor_samples >= samples)
+    return decoder->anchor_pts_us + (int64_t)(((decoder->anchor_samples - samples) * 125U) / 2U);
+  return decoder->current_pts_us - (int64_t)((samples * 125U) / 2U);
+}
 
 static const char* vw_source_decoder_normalize_posix_path(const char* url, char* buf, size_t buf_len) {
   if (!url || !buf || buf_len == 0) return NULL;
@@ -139,6 +170,9 @@ vw_source_decoder_t* vw_source_decoder_open(const char* url, vw_source_decoder_i
     return NULL;
   }
   dec->duration_us = fmt_ctx->duration > 0 ? (int64_t)av_rescale(fmt_ctx->duration, 1000000, AV_TIME_BASE) : -1;
+  int64_t tick_us = av_rescale_q(1, stream->time_base, (AVRational){1, 1000000});
+  dec->reanchor_tolerance_us =
+      2 * tick_us > VW_SOURCE_DECODER_MIN_REANCHOR_US ? 2 * tick_us : VW_SOURCE_DECODER_MIN_REANCHOR_US;
 
   if (info) {
     info->duration_us = dec->duration_us;
@@ -173,8 +207,9 @@ bool vw_source_decoder_seek(vw_source_decoder_t* decoder, int64_t target_pts_us)
     avcodec_flush_buffers(decoder->codec_ctx);
     swr_free(&decoder->swr_ctx);
     decoder->swr_ctx = replacement;
-    decoder->current_pts_us = target_pts_us;
+    vw_source_decoder_anchor(decoder, target_pts_us);
     decoder->seek_target_us = target_pts_us;
+    decoder->pts_anchored = false;  // the first decoded frame after the seek re-anchors the timeline
     decoder->demux_eof = false;
     decoder->flush_sent = false;
     decoder->eof_reached = false;
@@ -199,7 +234,7 @@ static void vw_source_decoder_copy_samples(vw_source_decoder_t* decoder, const i
       size_t trimmed = skip < count ? (size_t)skip : count;
       samples += trimmed;
       count -= trimmed;
-      decoder->current_pts_us += (int64_t)(trimmed * 125U / 2U);
+      vw_source_decoder_advance(decoder, trimmed);
     }
     if (decoder->current_pts_us >= decoder->seek_target_us) {
       decoder->seek_target_us = INT64_MIN;
@@ -210,7 +245,7 @@ static void vw_source_decoder_copy_samples(vw_source_decoder_t* decoder, const i
   if (to_copy > 0) {
     memcpy(out_pcm + *inout_total_samples, samples, to_copy * sizeof(int16_t));
     *inout_total_samples += to_copy;
-    decoder->current_pts_us += (int64_t)((to_copy * 1000000ULL) / 16000ULL);
+    vw_source_decoder_advance(decoder, to_copy);
   }
   size_t remainder = count - to_copy;
   if (remainder > 0) {
@@ -231,8 +266,18 @@ static bool vw_source_decoder_process_frame(vw_source_decoder_t* decoder, int16_
     // Raw stream timestamp -> media-relative: strip the container offset so
     // caption scheduling aligns with VLC's media timeline (mirror of seek).
     frame_pts -= decoder->stream_start_time;
-    decoder->current_pts_us = (int64_t)av_rescale_q(frame_pts, stream->time_base, (AVRational){1, 1000000});
-    decoder->current_pts_us -= swr_get_delay(decoder->swr_ctx, 1000000);
+    int64_t frame_pts_us = (int64_t)av_rescale_q(frame_pts, stream->time_base, (AVRational){1, 1000000});
+    frame_pts_us -= swr_get_delay(decoder->swr_ctx, 1000000);
+    int64_t deviation_us = frame_pts_us - decoder->current_pts_us;
+    if (!decoder->pts_anchored || deviation_us > decoder->reanchor_tolerance_us ||
+        deviation_us < -decoder->reanchor_tolerance_us) {
+      if (decoder->pts_anchored) {
+        vw_log_event(VW_LOG_LEVEL_DEBUG, "DECODER_FFMPEG_PTS", "timeline discontinuity %lldus -> %lldus (delta %lldus)",
+                     (long long)decoder->current_pts_us, (long long)frame_pts_us, (long long)deviation_us);
+      }
+      vw_source_decoder_anchor(decoder, frame_pts_us);
+      decoder->pts_anchored = true;
+    }
   }
 
   int16_t resample_buf[4096];
@@ -247,7 +292,7 @@ static bool vw_source_decoder_process_frame(vw_source_decoder_t* decoder, int16_
     size_t before = *inout_total_samples;
     vw_source_decoder_copy_samples(decoder, resample_buf, (size_t)converted, out_pcm, max_samples, inout_total_samples);
     if (out_pts_us && before == 0 && *inout_total_samples > 0)
-      *out_pts_us = decoder->current_pts_us - (int64_t)(*inout_total_samples * 125U / 2U);
+      *out_pts_us = vw_source_decoder_pts_before(decoder, *inout_total_samples);
   }
   return true;
 }
@@ -266,7 +311,7 @@ static vw_source_decoder_read_status_t vw_source_decoder_drain_swr(vw_source_dec
   size_t before = *inout_total_samples;
   vw_source_decoder_copy_samples(decoder, resample_buf, (size_t)converted, out_pcm, max_samples, inout_total_samples);
   if (out_pts_us && before == 0 && *inout_total_samples > 0)
-    *out_pts_us = decoder->current_pts_us - (int64_t)(*inout_total_samples * 125U / 2U);
+    *out_pts_us = vw_source_decoder_pts_before(decoder, *inout_total_samples);
   return VW_SOURCE_DECODER_READ_OK;
 }
 
@@ -284,7 +329,7 @@ vw_source_decoder_read_status_t vw_source_decoder_read_s16le(vw_source_decoder_t
     memcpy(out_pcm, decoder->leftover_buffer, to_copy * sizeof(int16_t));
     if (out_pts_us) *out_pts_us = decoder->current_pts_us;
     total_samples += to_copy;
-    decoder->current_pts_us += (int64_t)((to_copy * 1000000ULL) / 16000ULL);
+    vw_source_decoder_advance(decoder, to_copy);
     if (to_copy < decoder->leftover_count) {
       memmove(decoder->leftover_buffer, decoder->leftover_buffer + to_copy,
               (decoder->leftover_count - to_copy) * sizeof(int16_t));

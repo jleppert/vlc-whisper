@@ -817,8 +817,9 @@ int vw_worker_run(const vw_worker_config_t* config) {
               if (source_mode) {
                 source_eof = false;
                 vw_log_event(VW_LOG_LEVEL_INFO, "WORKER_SOURCE",
-                             "source look-ahead mode ACTIVE for '%s' (dur=%lldus fmt=%s)",
-                             payload_decoded.start.source_url, (long long)sinfo.duration_us, sinfo.container_format);
+                             "source look-ahead mode ACTIVE for '%s' (dur=%lldus fmt=%s origin=%lldus paused=%d)",
+                             payload_decoded.start.source_url, (long long)sinfo.duration_us, sinfo.container_format,
+                             (long long)current_playback_pts_us, (int)paused);
               }
             } else {
               source_mode = false;
