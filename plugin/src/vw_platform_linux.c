@@ -77,7 +77,14 @@ static void vw_platform_reap_detached(pid_t pid) {
 #endif
 #include <fcntl.h>
 
+#if defined(__APPLE__)
+// Darwin forbids direct `environ` references from shared libraries; _NSGetEnviron is the sanctioned accessor.
+#include <crt_externs.h>
+#define VW_ENVIRON (*_NSGetEnviron())
+#else
 extern char** environ;
+#define VW_ENVIRON environ
+#endif
 
 bool vw_platform_get_random_bytes(void* buffer, size_t size) {
   if (!buffer || size == 0) return false;
@@ -145,7 +152,7 @@ bool vw_platform_spawn_process(const char* executable_path, const char* const ar
   // Worker launch paths are identities, so never search the caller's PATH.
   if (executable_path[0] != '/') return false;
   if (access(executable_path, F_OK) != 0) return false;
-  int ret = posix_spawn(&pid, executable_path, NULL, NULL, (char* const*)argv, environ);
+  int ret = posix_spawn(&pid, executable_path, NULL, NULL, (char* const*)argv, VW_ENVIRON);
   if (ret != 0) return false;
 
   if (out_process)

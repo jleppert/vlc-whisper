@@ -21,8 +21,13 @@ static const char* kSpawnOk = "cmd.exe";
 static const char* kSpawnOkArg[] = {"cmd.exe", "/c", "exit", NULL};
 static const char* kSpawnMissing = "Z:\\definitely_missing_vw.exe";
 #else
+#if defined(__APPLE__)
+static const char* kSpawnOk = "/usr/bin/true";  // macOS has no /bin/true
+static const char* kSpawnOkArg[] = {"/usr/bin/true", NULL};
+#else
 static const char* kSpawnOk = "/bin/true";
 static const char* kSpawnOkArg[] = {"/bin/true", NULL};
+#endif
 static const char* kSpawnMissing = "/nonexistent/vw_missing_binary";
 #endif
 

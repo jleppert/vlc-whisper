@@ -39,6 +39,19 @@ if(UNIX AND NOT APPLE)
   target_link_libraries(vlc_whisper_plugin PRIVATE dl)
 endif()
 
+if(APPLE)
+  # VLC.app resolves libvlccore symbols at load time (plugins link @rpath/libvlccore.dylib but we build
+  # without the VLC SDK), so let the linker defer unresolved symbols to dyld. _DARWIN_C_SOURCE restores
+  # the BSD/Darwin extensions (LOCAL_PEERCRED, SO_NOSIGPIPE, ...) that -std=c17 strict mode hides.
+  target_link_options(vlc_whisper_plugin PRIVATE -Wl,-undefined,dynamic_lookup)
+  target_compile_definitions(vlc_whisper_plugin PRIVATE _DARWIN_C_SOURCE)
+  set_target_properties(vlc_whisper_plugin PROPERTIES SUFFIX ".dylib")
+  # Subtitles-menu toggle: an Objective-C "interface" submodule (see src/vw_macos_menu.m).
+  target_sources(vlc_whisper_plugin PRIVATE src/vw_macos_menu.m)
+  set_source_files_properties(src/vw_macos_menu.m PROPERTIES COMPILE_OPTIONS "-fobjc-arc;-Wno-pedantic")
+  target_link_libraries(vlc_whisper_plugin PRIVATE "-framework Cocoa")
+endif()
+
 if(WIN32)
     # Windows DLLs require an import library to resolve external symbols.
     # We generate one from a .def file containing the VLC API symbols we use.

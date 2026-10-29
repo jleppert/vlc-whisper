@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(vlc_whisper VERSION 0.2.0 LANGUAGES C CXX)
+if(APPLE)
+    enable_language(OBJC)  # plugin/src/vw_macos_menu.m (Subtitles-menu toggle); must be enabled at top level
+endif()
 
 set(VW_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 file(MAKE_DIRECTORY "${VW_GENERATED_DIR}/lua/extensions")
@@ -31,6 +34,14 @@ set(CMAKE_C_EXTENSIONS OFF)
 # Option to toggle building unit/integration tests
 option(BUILD_TESTING "Build unit and integration tests" ON)
 
+if(APPLE)
+    # -std=c17 puts Darwin headers in strict ISO mode; restore the BSD/POSIX extensions the POSIX sources
+    # and tests rely on (mkdtemp, LOCAL_PEERCRED, SO_NOSIGPIPE, strdup, ...). Linux gets this via _GNU_SOURCE.
+    add_compile_definitions(_DARWIN_C_SOURCE)
+    # Prefer the system curl over whatever package manager happens to be first on PATH; the worker spawns
+    # this absolute path for model downloads and translation, so it must exist on every Mac.
+    find_program(VW_CURL_EXECUTABLE NAMES curl PATHS /usr/bin NO_DEFAULT_PATH)
+endif()
 if(NOT WIN32)
     find_program(VW_CURL_EXECUTABLE NAMES curl REQUIRED)
     add_compile_definitions(VW_CURL_EXECUTABLE="${VW_CURL_EXECUTABLE}")
@@ -115,4 +126,6 @@ add_subdirectory(tools/quality_benchmark EXCLUDE_FROM_ALL)
 include(cmake/vw_packaging.cmake)
 if(UNIX AND NOT APPLE)
     include(cmake/vw_packaging_linux.cmake)
+elseif(APPLE)
+    include(cmake/vw_packaging_macos.cmake)
 endif()

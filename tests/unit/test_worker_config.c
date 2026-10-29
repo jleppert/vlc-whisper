@@ -8,6 +8,10 @@
 // dangling flag with no value, and NULL config (all map to exit code 2).
 #include <errno.h>
 #include <stdio.h>
+#if defined(__APPLE__)
+#include <limits.h>
+#include <mach-o/dyld.h>
+#endif
 #include <string.h>
 
 #ifdef _WIN32
@@ -68,6 +72,15 @@ static bool vw_test_get_executable_dir(char* out, size_t out_size) {
   ssize_t linux_path_length = readlink("/proc/self/exe", executable_path, sizeof(executable_path) - 1);
   if (linux_path_length <= 0 || (size_t)linux_path_length >= sizeof(executable_path)) return false;
   path_length = (size_t)linux_path_length;
+#elif defined(__APPLE__)
+  char raw_path[VW_PATH_MAX_BYTES];
+  uint32_t raw_size = (uint32_t)sizeof(raw_path);
+  if (_NSGetExecutablePath(raw_path, &raw_size) != 0) return false;
+  char resolved[PATH_MAX];
+  const char* source = realpath(raw_path, resolved) ? resolved : raw_path;
+  path_length = strlen(source);
+  if (path_length == 0 || path_length >= sizeof(executable_path)) return false;
+  memcpy(executable_path, source, path_length);
 #else
   return false;
 #endif

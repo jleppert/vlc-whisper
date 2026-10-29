@@ -15,6 +15,10 @@
 #include <windows.h>
 #define VW_WORKER_CONFIG_GETCWD _getcwd
 #else
+#if defined(__APPLE__)
+#include <limits.h>
+#include <mach-o/dyld.h>
+#endif
 #include <unistd.h>
 #define VW_WORKER_CONFIG_GETCWD getcwd
 #endif
@@ -91,6 +95,16 @@ static bool vw_worker_config_get_executable_dir(char* out, size_t out_size) {
   ssize_t linux_path_length = readlink("/proc/self/exe", executable_path, sizeof(executable_path) - 1);
   if (linux_path_length <= 0 || (size_t)linux_path_length >= sizeof(executable_path)) return false;
   path_length = (size_t)linux_path_length;
+#elif defined(__APPLE__)
+  char raw_path[VW_PATH_MAX_BYTES];
+  uint32_t raw_size = (uint32_t)sizeof(raw_path);
+  if (_NSGetExecutablePath(raw_path, &raw_size) != 0) return false;
+  // _NSGetExecutablePath may return a relative or symlinked path; canonicalize so sibling probing is stable.
+  char resolved[PATH_MAX];
+  const char* source = realpath(raw_path, resolved) ? resolved : raw_path;
+  path_length = strlen(source);
+  if (path_length == 0 || path_length >= sizeof(executable_path)) return false;
+  memcpy(executable_path, source, path_length);
 #else
   return false;
 #endif

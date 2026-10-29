@@ -59,7 +59,8 @@ else()
 endif()
 
 add_vw_test(test_source_decoder unit/test_source_decoder.c ${VW_SOURCE_DECODER_SRCS})
-if(NOT WIN32 AND FFMPEG_FOUND)
+# Apple ld64 has no --wrap; the decoder-boundary and tail-flush seams that depend on it are Linux/MinGW only.
+if(NOT WIN32 AND FFMPEG_FOUND AND NOT APPLE)
     add_vw_test(vw_test_decoder_boundaries integration/vw_test_decoder_boundaries.c ${VW_SOURCE_DECODER_SRCS})
     target_compile_definitions(vw_test_decoder_boundaries PRIVATE VW_WITH_FFMPEG)
     target_link_libraries(vw_test_decoder_boundaries PRIVATE PkgConfig::FFMPEG)
@@ -188,6 +189,7 @@ add_vw_stub_worker_contract_test(test_decoder_again_never_becomes_eof
                                  integration/test_decoder_again_never_becomes_eof.c)
 add_vw_stub_worker_contract_test(test_source_error_never_becomes_clean_eof
                                  integration/test_source_error_never_becomes_clean_eof.c)
+if(NOT APPLE)  # needs GNU ld --wrap
 add_vw_stub_worker_contract_test(test_live_media_end_flushes_tail
                                  integration/test_live_media_end_flushes_tail.c)
 target_link_options(test_live_media_end_flushes_tail PRIVATE -Wl,--wrap=vw_whisper_engine_transcribe_pcm)
@@ -198,6 +200,7 @@ set_property(SOURCE ${CMAKE_SOURCE_DIR}/worker/src/vw_worker.c TARGET_DIRECTORY 
 set_property(SOURCE ${CMAKE_SOURCE_DIR}/worker/src/vw_worker.c TARGET_DIRECTORY test_live_media_end_flushes_tail APPEND PROPERTY
              COMPILE_DEFINITIONS VW_WORKER_TRANSLATION_DIAG_OVERRIDE=1)
 add_test(NAME vw_tail_translation_timeout COMMAND test_live_media_end_flushes_tail timeout)
+endif()
 add_vw_stub_worker_contract_test(test_new_session_resets_all_session_state
                                  integration/test_new_session_resets_all_session_state.c)
 add_vw_stub_worker_contract_test(test_worker_p2_contracts

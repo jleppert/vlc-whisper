@@ -49,6 +49,7 @@ static void vw_test_endpoint(char* out, size_t capacity, const char* suffix) {
   unlink(out);
 }
 
+#if !defined(__APPLE__)
 static void vw_test_seqpacket_truncation_is_fatal(void) {
   char endpoint[128];
   vw_test_endpoint(endpoint, sizeof(endpoint), "truncation");
@@ -69,6 +70,7 @@ static void vw_test_seqpacket_truncation_is_fatal(void) {
   vw_ipc_close(args.handle);
   unlink(endpoint);
 }
+#endif
 
 static void vw_test_large_send_is_chunked(void) {
   char endpoint[128];
@@ -135,7 +137,10 @@ static void vw_test_stalled_send_has_one_deadline(void) {
 }
 
 int main(void) {
+#if !defined(__APPLE__)
+  // Darwin has no AF_UNIX SOCK_SEQPACKET; the transport is a byte stream there and cannot detect record truncation.
   vw_test_seqpacket_truncation_is_fatal();
+#endif
   vw_test_large_send_is_chunked();
   vw_test_listener_retries_eintr();
   vw_test_stalled_send_has_one_deadline();

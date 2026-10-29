@@ -19,7 +19,12 @@ endif()
 # transparently degrade to CPU when the Vulkan SDK is unavailable. Official GPU release presets
 # set VW_REQUIRE_VULKAN=ON so a missing SDK/glslc is a configuration error instead of silently
 # producing a CPU-only artifact under the canonical release preset name.
-option(VW_WITH_VULKAN "worker: build whisper.cpp with ggml-vulkan GPU backend" ON)
+if(APPLE)
+    set(VW_WITH_VULKAN_DEFAULT OFF)  # macOS uses ggml-metal (GGML_METAL defaults ON on Apple)
+else()
+    set(VW_WITH_VULKAN_DEFAULT ON)
+endif()
+option(VW_WITH_VULKAN "worker: build whisper.cpp with ggml-vulkan GPU backend" ${VW_WITH_VULKAN_DEFAULT})
 option(VW_REQUIRE_VULKAN "worker: fail configure when Vulkan was requested but cannot be enabled" OFF)
 option(VW_QUALITY_BENCHMARK_HOOKS "worker: enable developer-only ASR benchmark completion hooks" OFF)
 if(VW_REQUIRE_VULKAN AND NOT VW_WITH_VULKAN)
@@ -64,7 +69,14 @@ find_package(Threads REQUIRED)
 # on non-Windows; find it at this scope so the worker can also manage the OpenMP runtime.
 find_package(OpenMP)
 
-add_subdirectory(third_party/whisper.cpp)
+if(APPLE)
+    # whisper.cpp/ggml register unconditional install() rules for their static libs, headers and cmake/pkg-config
+    # files. The macOS install prefix is the live VLC.app bundle, so keep those rules out of `cmake --install`;
+    # EXCLUDE_FROM_ALL only drops the subdirectory's install rules, the worker still links the whisper target.
+    add_subdirectory(third_party/whisper.cpp EXCLUDE_FROM_ALL)
+else()
+    add_subdirectory(third_party/whisper.cpp)
+endif()
 
 # Optimize third-party tensor compute kernels (ggml & whisper) so VAD and Whisper unit tests
 # run in milliseconds rather than suffering unvectorized -O0 CPU slowdowns during debug runs.
@@ -146,12 +158,20 @@ target_compile_options(vlc-whisper-worker PRIVATE
     -Wextra
     -Wpedantic
 )
+if(APPLE)
+    target_compile_definitions(vlc-whisper-worker PRIVATE _DARWIN_C_SOURCE)
+endif()
 
 # Dist artifact naming: the GPU (default) build keeps the canonical name the plugin discovers;
 # the CPU-only build gets a distinct -cpu suffix so both can ship side by side (see plan 17a).
+# On macOS the GPU backend is ggml-metal (whisper.cpp default on Apple), which needs no SDK and
+# falls back to CPU inside ggml itself, so the Metal worker keeps the canonical name.
 if(GGML_VULKAN)
     set_target_properties(vlc-whisper-worker PROPERTIES OUTPUT_NAME "vlc-whisper-worker")
     target_compile_definitions(vlc-whisper-worker PRIVATE VW_HAVE_VULKAN=1)
+elseif(APPLE AND GGML_METAL)
+    set_target_properties(vlc-whisper-worker PROPERTIES OUTPUT_NAME "vlc-whisper-worker")
+    target_compile_definitions(vlc-whisper-worker PRIVATE VW_HAVE_METAL=1)
 else()
     set_target_properties(vlc-whisper-worker PROPERTIES OUTPUT_NAME "vlc-whisper-worker-cpu")
 endif()

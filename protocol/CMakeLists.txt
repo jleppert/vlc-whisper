@@ -17,3 +17,6 @@ target_compile_options(vw_protocol PRIVATE
 )
 
 set_target_properties(vw_protocol PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(APPLE)
+    target_compile_definitions(vw_protocol PRIVATE _DARWIN_C_SOURCE)
+endif()

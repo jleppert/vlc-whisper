@@ -43,6 +43,9 @@ static void vw_plugin_log_sink(vw_log_level_t level, const char* event_id, const
 #include <windows.h>
 #else
 #include <dlfcn.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -70,6 +73,12 @@ static input_thread_t* vw_plugin_find_input(filter_t* p_filter);
 static int64_t vw_plugin_input_position_us(input_thread_t* input);
 
 static char vw_plugin_dl_anchor;
+
+#if defined(__APPLE__)
+// plugin/src/vw_macos_menu.m
+int vw_macos_menu_open(vlc_object_t* obj);
+void vw_macos_menu_close(vlc_object_t* obj);
+#endif
 
 #ifdef _WIN32
 // Converts a UTF-8 path to UTF-16 for Win32 filesystem and discovery APIs.
@@ -331,6 +340,13 @@ static bool vw_plugin_resolve_worker_path(char* out, size_t out_size) {
     exe_path[n] = '\0';
     if (vw_plugin_probe_ancestors(exe_path, 0, worker_names, 2, out, out_size)) return true;
   }
+#elif defined(__APPLE__)
+  // VLC.app/Contents/MacOS/VLC: probe the executable directory the same way Linux probes /proc/self/exe.
+  char exe_path[4096];
+  uint32_t exe_size = (uint32_t)sizeof(exe_path);
+  if (_NSGetExecutablePath(exe_path, &exe_size) == 0) {
+    if (vw_plugin_probe_ancestors(exe_path, 0, worker_names, 2, out, out_size)) return true;
+  }
 #endif
   return false;
 #endif
@@ -364,6 +380,13 @@ static bool vw_plugin_resolve_cpu_worker_path(char* out, size_t out_size) {
   ssize_t n = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
   if (n > 0) {
     exe_path[n] = '\0';
+    if (vw_plugin_probe_ancestors(exe_path, 0, cpu_names, 1, out, out_size)) return true;
+  }
+#elif defined(__APPLE__)
+  // VLC.app/Contents/MacOS/VLC: probe the executable directory the same way Linux probes /proc/self/exe.
+  char exe_path[4096];
+  uint32_t exe_size = (uint32_t)sizeof(exe_path);
+  if (_NSGetExecutablePath(exe_path, &exe_size) == 0) {
     if (vw_plugin_probe_ancestors(exe_path, 0, cpu_names, 1, out, out_size)) return true;
   }
 #endif
@@ -461,6 +484,13 @@ static bool vw_plugin_resolve_model_path(char* out, size_t out_size) {
   ssize_t n = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
   if (n > 0) {
     exe_path[n] = '\0';
+    if (vw_plugin_probe_ancestors(exe_path, 0, model_names, model_name_count, out, out_size)) return true;
+  }
+#elif defined(__APPLE__)
+  // VLC.app/Contents/MacOS/VLC: probe the executable directory the same way Linux probes /proc/self/exe.
+  char exe_path[4096];
+  uint32_t exe_size = (uint32_t)sizeof(exe_path);
+  if (_NSGetExecutablePath(exe_path, &exe_size) == 0) {
     if (vw_plugin_probe_ancestors(exe_path, 0, model_names, model_name_count, out, out_size)) return true;
   }
 #endif
@@ -1966,10 +1996,17 @@ vlc_module_begin() set_shortname("VLC-Whisper") set_description("Offline Whisper
                                                     add_bool("whisper-show-paused", true,
                                                              "Show subtitles while paused (local files only)",
                                                              "Hold the current cue and preview paused seeks", false)
-                                                        set_callbacks(vw_plugin_open, vw_plugin_close) vlc_module_end()
+                                                        set_callbacks(vw_plugin_open, vw_plugin_close)
+#if defined(__APPLE__)
+    // Extra interface (vlcrc: extraintf=vlc_whisper_menu) that adds a captions toggle to VLC.app's Subtitles menu.
+    add_submodule() set_shortname("VLC-Whisper Menu") set_description("Whisper AI Captions toggle (Subtitles menu)")
+        set_capability("interface", 0) set_category(CAT_INTERFACE) set_subcategory(SUBCAT_INTERFACE_CONTROL)
+            add_shortcut("vlc_whisper_menu") set_callbacks(vw_macos_menu_open, vw_macos_menu_close)
+#endif
+                vlc_module_end()
 #pragma GCC diagnostic pop
 
 #if defined(__linux__) && defined(__GNUC__)
-                                                            EXTERN_SYMBOL DLL_SYMBOL
-    int vlc_entry__3_0_0ft64(vlc_set_cb vlc_set, void* opaque) __attribute__((alias("vlc_entry__3_0_0f")));
+                    EXTERN_SYMBOL DLL_SYMBOL int vlc_entry__3_0_0ft64(vlc_set_cb vlc_set, void* opaque)
+                        __attribute__((alias("vlc_entry__3_0_0f")));
 #endif
