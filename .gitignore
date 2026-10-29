@@ -215,3 +215,6 @@ samples/snippets/*.png
 # Developer-only ASR quality corpus, transcripts, hypotheses, and reports
 tools/quality_benchmark/local/
 tools/quality_benchmark/__pycache__/
+
+# macOS release packaging output
+/dist/
