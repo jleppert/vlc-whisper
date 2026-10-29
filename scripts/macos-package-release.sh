@@ -109,4 +109,4 @@ TXT
 # 6. Zip (ditto keeps the models symlink and code signatures).
 rm -f "$ROOT/dist/$NAME.zip"
 (cd "$WORK/stage" && ditto -c -k --norsrc --noextattr --noacl --keepParent "$NAME" "$ROOT/dist/$NAME.zip")
-shasum -a 256 "$ROOT/dist/$NAME.zip" | tee "$ROOT/dist/$NAME.zip.sha256"
+(cd "$ROOT/dist" && shasum -a 256 "$NAME.zip" | tee "$NAME.zip.sha256")
