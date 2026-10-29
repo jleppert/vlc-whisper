@@ -116,7 +116,7 @@ VLC-Whisper is an out-of-tree plugin module that interfaces with VLC Media Playe
 - **License**: GNU Lesser General Public License v2.1 or later (LGPL v2.1+)
 - **URL**: https://ffmpeg.org
 
-On POSIX/Linux systems where FFmpeg support is enabled, `vlc-whisper-worker` dynamically links against system-provided shared libraries (`libavformat.so`, `libavcodec.so`, `libswresample.so`, `libavutil.so`) built under LGPL v2.1+ configuration. Source code for FFmpeg is available from https://ffmpeg.org. On Windows systems, native Windows Media Foundation is utilized instead of FFmpeg.
+On POSIX/Linux systems where FFmpeg support is enabled, `vlc-whisper-worker` dynamically links against system-provided shared libraries (`libavformat.so`, `libavcodec.so`, `libswresample.so`, `libavutil.so`) built under LGPL v2.1+ configuration. Source code for FFmpeg is available from https://ffmpeg.org. On Windows systems, native Windows Media Foundation is utilized instead of FFmpeg. The macOS release zip (`scripts/macos-package-release.sh`) bundles unmodified FFmpeg shared libraries built with the default LGPL v2.1+ configuration (no `--enable-gpl` or `--enable-nonfree`) under `VLC.app/Contents/MacOS/lib/vlc-whisper`, together with the LGPL license text and the exact source tarball URL in `share/doc/vlc-whisper`. The worker loads them dynamically, so they can be replaced with any ABI-compatible build.
 
 ---
 

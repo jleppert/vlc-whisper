@@ -8,13 +8,17 @@
 <p align="center">
   <a href="https://github.com/rzv04/vlc-whisper/releases"><img src="https://img.shields.io/github/v/release/rzv04/vlc-whisper?color=blue&label=version" alt="Release"></a>
   <a href="https://github.com/rzv04/vlc-whisper/actions/workflows/ci.yml"><img src="https://github.com/rzv04/vlc-whisper/actions/workflows/ci.yml/badge.svg" alt="CI Status"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%20(Official)%20%7C%20Linux%20(Preview)-informational" alt="Platforms">
+  <img src="https://img.shields.io/badge/platform-Windows%20(Official)%20%7C%20Linux%20(Preview)%20%7C%20macOS%20(this%20fork)-informational" alt="Platforms">
+  <a href="https://github.com/jleppert/vlc-whisper/releases"><img src="https://img.shields.io/github/v/release/jleppert/vlc-whisper?label=macOS%20release&color=black" alt="macOS release"></a>
   <img src="https://img.shields.io/badge/VLC-3.0.23%2B%20(64--bit)-orange" alt="VLC 3.0.23+">
   <img src="https://img.shields.io/badge/License-MIT-green.svg" alt="MIT License">
   <img src="https://img.shields.io/badge/C-C17-blue" alt="C17">
 </p>
 
 
+
+> **macOS users:** this fork adds Apple Silicon support. See [macOS (Apple Silicon)](#macos-apple-silicon) for the
+> download and install steps and a summary of the port.
 
 VLC-Whisper transcribes local media and livestreams (IPTV, VoD, other network streams) with [whisper.cpp](https://github.com/ggml-org/whisper.cpp) into 10+ languages, with translation into 250+ languages through Google Translate.
 
@@ -60,6 +64,82 @@ Uninstall with:
 ```bash
 sudo apt remove vlc-whisper
 ```
+
+## macOS (Apple Silicon)
+
+> **This fork ([jleppert/vlc-whisper](https://github.com/jleppert/vlc-whisper)) adds a macOS port.** Upstream
+> [rzv04/vlc-whisper](https://github.com/rzv04/vlc-whisper) supports Windows and Ubuntu only. Everything below is
+> specific to this fork and has been tested on an M4 Max with VLC 3.0.21 (arm64) on macOS 15.
+
+### Install from the release (recommended)
+
+Requires an Apple Silicon Mac (macOS 13 or newer) and [VLC 3.0.x](https://www.videolan.org/vlc/download-macosx.html)
+for Apple Silicon or Universal in `/Applications`. Nothing else is needed: FFmpeg and the default models are bundled.
+
+1. Download `vlc-whisper-<version>-macos-arm64.zip` from the
+   [Releases page](https://github.com/jleppert/vlc-whisper/releases) and unzip it.
+2. **Quit VLC**, then in Terminal:
+
+   ```bash
+   cd ~/Downloads/vlc-whisper-*-macos-arm64
+   ./install.sh                  # or: ./install.sh /path/to/VLC.app    (--no-menu skips the menu toggle)
+   ```
+
+   The installer copies the plugin, worker, bundled FFmpeg libraries, models and settings extension into
+   `VLC.app/Contents/MacOS`, clears the download quarantine flag, and registers the Subtitles-menu toggle. It asks
+   for your password only if VLC.app is not writable by your account.
+3. Open VLC, play something with speech, and choose **Subtitles > Whisper AI Captions**. The check mark is
+   remembered across launches; choose it again to turn captions off.
+
+To switch models (for example `large-v3-turbo`, recommended on Apple Silicon), open
+**VLC media player > Extensions > VLC-Whisper Settings**. Models other than the bundled `tiny` are downloaded to
+`~/.local/share/vlc-whisper/models` and verified by SHA-256. Run `./uninstall.sh` from the same folder to remove
+everything except downloaded models.
+
+The binaries are ad-hoc signed, not notarized. VLC.app disables library validation, so VLC loads the plugin.
+Adding files breaks VLC.app's sealed signature. macOS ignores that for a VLC it has already approved, so
+**open VLC at least once before installing**; the installer refuses to run otherwise. If macOS ever reports VLC as
+"damaged", run `./uninstall.sh` (it restores the original signature), open and quit VLC, then install again.
+Updating VLC replaces VLC.app and removes the plugin; run `./install.sh` again after each VLC update.
+
+### Build from source
+
+Requires the Xcode command line tools, CMake, Ninja and FFmpeg (`brew install cmake ninja ffmpeg pkg-config`).
+
+```bash
+git clone --recursive https://github.com/jleppert/vlc-whisper.git
+cd vlc-whisper
+cmake --preset macos-arm64-release -DVW_PROVISION_MODELS=ON
+cmake --build --preset macos-arm64-release -j8
+cmake --build --preset macos-arm64-release --target provision_models   # verifies/downloads pinned models
+cmake --install build/macos-arm64-release   # into /Applications/VLC.app/Contents/MacOS (quit VLC first)
+scripts/macos-enable-menu.sh                # Subtitles > Whisper AI Captions (--disable to remove)
+```
+
+Pass `-DCMAKE_INSTALL_PREFIX=/path/to/VLC.app/Contents/MacOS` at configure time to target another bundle. Builds made
+this way link Homebrew's FFmpeg. `scripts/macos-package-release.sh` produces the self-contained release zip instead:
+it builds a minimal LGPL FFmpeg, targets macOS 13, bundles the libraries under `lib/vlc-whisper`, and fails if
+anything still references Homebrew. The test suite runs with
+`cmake --preset macos-arm64-debug && cmake --build --preset macos-arm64-debug && ctest --preset macos-arm64-debug`.
+
+Without the menu toggle you can enable captions for a single launch with
+`/Applications/VLC.app/Contents/MacOS/VLC --audio-filter=vlc_whisper <media>`.
+
+### What this port changes
+
+| Area | Change |
+|---|---|
+| IPC | Darwin's `AF_UNIX` has no `SOCK_SEQPACKET`, so Apple builds use `SOCK_STREAM` with a partial-send loop and 256 KB socket buffers. The authenticated framing on top is unchanged. |
+| Platform code | `_NSGetEnviron()` replaces `environ` inside the plugin dylib. `_NSGetExecutablePath()` + `realpath()` replace `/proc/self/exe`. `_DARWIN_C_SOURCE` is set under `-std=c17`. The plugin links with `-undefined dynamic_lookup` against `libvlccore`. |
+| GPU | whisper.cpp uses the **Metal** backend, with the shader library embedded in the worker; there is no Vulkan on macOS. One `vlc-whisper-worker` binary covers all Apple Silicon Macs. |
+| Build and install | New `macos-arm64-debug`, `macos-arm64-debug-cpu` and `macos-arm64-release` presets. `cmake/vw_packaging_macos.cmake` installs into `VLC.app/Contents/MacOS` and ad-hoc signs. whisper.cpp is added `EXCLUDE_FROM_ALL` so its headers and libs stay out of VLC.app. `curl` is pinned to `/usr/bin/curl`. |
+| Menu toggle | VLC's Cocoa menus cannot be extended through libvlc, so the plugin dylib carries a small Objective-C extra-interface module (`vlc_whisper_menu`). It adds **Subtitles > Whisper AI Captions**, toggles the audio filter live on the playing media, and saves the choice to `vlcrc`. `scripts/macos-enable-menu.sh` registers it through `extraintf`. |
+| Matroska fix (all platforms) | MKV/WebM store timestamps in 1 ms ticks. The source decoder re-anchored to every rounded AAC frame timestamp, so the look-ahead buffer saw a fake discontinuity every 2 s and never filled the 6 s VAD window, and only the last seconds of such files got captions. Timestamps now come from an exact sample count and re-anchor only on real jumps. Regression test: `test_source_ms_timebase_audio_accumulates`. |
+| Models | Adds `large-v3-turbo` to the catalog, settings extension and model resolution. On an M4 Max it transcribes 60 s of audio in 2.2 s (large-v3: 5.0 s, small: 1.4 s) with about 1.7% word disagreement against large-v3. |
+| Tests | The two tests that need GNU ld `--wrap` and the SEQPACKET truncation case are skipped on Apple. Platform and worker-config tests gained Darwin paths. The rest of the suite passes on macOS. |
+
+Known limitations: Apple Silicon only (Intel Macs are untested), VLC 3.0.x only, and the binaries are not notarized.
+Whisper does not separate speakers.
 
 ## Features
 

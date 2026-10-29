@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Experimental macOS (Apple Silicon) build: Metal-accelerated worker, VLC.app install rules, and a
+  **Subtitles > Whisper AI Captions** menu toggle.
+- Self-contained macOS release zip (`scripts/macos-package-release.sh`): bundled minimal LGPL FFmpeg, macOS 13+
+  M1-baseline CPU flags, install/uninstall scripts that clear quarantine and restore VLC.app's signature on removal.
+- `large-v3-turbo` model catalog entry (near large-v3 accuracy at about half the size and twice the speed),
+  selectable in the settings extension.
+
+### Fixed
+
+- Captions no longer stall on Matroska/WebM (and other millisecond-timebase) media: the source decoder now derives
+  output timestamps from an exact sample count, so container PTS rounding is no longer mistaken for a discontinuity
+  that cleared the look-ahead buffer before the VAD window filled. Previously only the final seconds of such files
+  were captioned. Regression test: `test_source_ms_timebase_audio_accumulates`.
+
 ## [0.2.0] - Unreleased
 
 ### Added
